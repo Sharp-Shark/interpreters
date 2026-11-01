@@ -39,8 +39,8 @@ void display (const unsigned int* tape, unsigned int size, unsigned int pos)
 
 void registerFunction (char** functions, char key, const char* string)
 {
-	if (functions[key] == NULL) functions[key] = realloc(functions[key], sizeof(char) * strlen(string));
-	strcpy(functions[key], string);
+	if (functions[key] != NULL) free(functions[key]);
+	functions[key] = strdup(string);
 }
 
 void interpret (const char* string, unsigned int length, unsigned int* tape, unsigned int size, unsigned int* ppos)
@@ -66,6 +66,8 @@ void interpret (const char* string, unsigned int length, unsigned int* tape, uns
 				case '!' : display(tape, size, pos); break;
 				case '&' : tape[pos] = pos; break;
 				case '*' : pos = tape[pos]; break;
+				case '@' : tape[pos] = tape[tape[pos]]; break;
+				case '%' : tape[tape[pos]] = pos; break;
 				case '0' :
 				case '1' :
 				case '2' :
@@ -76,7 +78,7 @@ void interpret (const char* string, unsigned int length, unsigned int* tape, uns
 				case '7' :
 				case '8' :
 				case '9' : tape[pos] = mod(c - '0' + tape[pos] * 10, size);
-				default : if (functions[c] != NULL) { interpret(functions[c], strlen(functions[c]), tape, size, ppos); pos = *ppos; }
+				default : if (functions[c] != NULL) { *ppos = pos; interpret(functions[c], strlen(functions[c]), tape, size, ppos); pos = *ppos; }
 			}
 		}
 		else
@@ -117,10 +119,18 @@ int main ()
 	
 	unsigned int functionsSize = 256;
 	functions = malloc(sizeof(char*) * functionsSize);  for (int i = 0; i < functionsSize; i++) functions[i] = NULL;
-	registerFunction(functions, 'r', "[-]*[-] +[*[-]*+]"); // reset
-	registerFunction(functions, 'a', "[-<+>]"); // add; a = a + b; b = 0
-	registerFunction(functions, 'm', "<[->>>+<<<]> [- >>[-<+<<+>>>]< [->+<]<] >>[-]<<"); // multiply; a = a+d + (a+c+d) * (b-1); b,c,d = 0
-	registerFunction(functions, 'h', "r72.[-]101.[-]108..>111.>44.[-]32.[-]119.[-]<.+++.<.[-]100.[-]46.r"); // Hello, world.
+	// reset (pos, tape) -> (0, 0)
+	registerFunction(functions, 'r', "[-]*[-] +[*[-]*+]");
+	// add; (a, b) -> (a + b, 0)
+	registerFunction(functions, 'a', "[-<+>]");
+	// multiply; (a, b, c, d) -> (a+d + (b-1)(a+c+d), 0, 0, 0)
+	registerFunction(functions, 'm', "<[->>>+<<<]> [- >>[-<+<<+>>>]< [->+<]<] >>[-]<<");
+	// copy; (a, b, c) -> (a + c, a + b, 0)
+	registerFunction(functions, 'c', "[->+>+<<] >> [-<<+>>] <<");
+	// stack alloc; (pos, a, b) -> (pos + a + b + 1, pos + a + b + 1, 0)
+	registerFunction(functions, 's', "+c[-]&>a<%*");
+	// Hello, world.
+	registerFunction(functions, 'h', "r72.[-]101.[-]108..>111.>44.[-]32.[-]119.[-]<.+++.<.[-]100.[-]46.r");
 	
 	unsigned int inputSize = 1024;
 	char* input = malloc(sizeof(char) * inputSize);
